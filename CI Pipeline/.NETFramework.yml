@@ -1,0 +1,79 @@
+trigger:
+  branches:
+    include:
+    - refs/heads/UAT
+  paths:
+    include:
+    - Framework
+  batch: True
+name: $(BuildDefinitionName)_$(SourceBranchName)_$(Date:yyyyMMdd)$(Rev:.r)
+resources:
+  repositories:
+  - repository: self
+    type: git
+    ref: refs/heads/UAT
+jobs:
+- job: Phase_1
+  displayName: Phase 1
+  cancelTimeoutInMinutes: 1
+  pool:
+    name: CloudBuild
+  steps:
+  - checkout: self
+    clean: true
+  - task: NuGetCommand@2
+    name: NuGetInstaller_1
+    displayName: 'NuGet restore  '
+    inputs:
+      solution: WebAPI.sln
+      selectOrConfig: config
+      nugetConfigPath: nuget.config
+      searchPatternPush: $(Build.ArtifactStagingDirectory)/*.nupkg
+  - task: ivanboyko.RegexReplace@1
+    displayName: 'Regex in  .Framework '
+    inputs:
+      FileMask: API/Properties/AssemblyInfo.cs
+      Regex: "(\\[assembly: Assembly(File|Informational)?Version\\([\"'])(\\d+\\.){2,3}(\\d+|\\*)?([\"']\\)])"
+      Replacement: ${1}0.$(system.definitionId).$(Build.DefinitionVersion).$(Build.BuildId)${5}
+  - task: replacetokens@2
+    displayName: Replace tokens in Web.UAT.config
+    inputs:
+      rootDirectory: API
+      targetFiles: Web.UAT.config
+      actionOnMissing: fail
+  - task: SonarQubePrepare@4
+    displayName: Prepare analysis on SonarQube
+    continueOnError: True
+    inputs:
+      SonarQube: 
+      projectKey: API
+      projectName: API
+      projectVersion: ${1}0.$(system.definitionId).$(Build.DefinitionVersion).$(Build.BuildId)${5}
+  - task: VSBuild@1
+    name: VSBuild_2
+    displayName: Build API
+    inputs:
+      solution: API.sln
+      msbuildArgs: /p:OutDir=$(Build.StagingDirectory) /p:SkipInvalidConfigurations=true /p:Configuration=$(UAT.Configuration)
+      platform: $(Build.Platform)
+      configuration: $(UAT.Configuration)
+      clean: true
+      msbuildArchitecture: x64
+  - task: VSTest@1
+    name: VSTest_3
+    displayName: Test Assemblies **\*test*.dll;-:**\obj\**
+    inputs:
+      codeCoverageEnabled: true
+      vsTestVersion: latest
+  - task: SonarQubeAnalyze@4
+    displayName: Run Code Analysis
+    continueOnError: True
+  - task: SonarQubePublish@4
+    displayName: Publish Quality Gate Result
+    continueOnError: True
+  - task: PublishBuildArtifacts@1
+    displayName: 'Publish Artifact: API'
+    inputs:
+      PathtoPublish: $(Build.StagingDirectory)
+      ArtifactName: API
+...

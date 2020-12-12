@@ -1,0 +1,43 @@
+trigger:
+  branches:
+    include:
+    - refs/heads/master
+  paths:
+    include:
+    - Database
+name: $(SourceBranchName).$(Date:yyyyMMdd)$(Rev:.r)
+jobs:
+- job: Phase_1
+  displayName: Phase 1
+  cancelTimeoutInMinutes: 1
+  pool:
+    name: CloudBuild
+  steps:
+  - checkout: self
+    clean: true
+  - task: VSBuild@1
+    name: VSBuild_1
+    displayName: 'Build solution Database '
+    inputs:
+      solution: Database.sln
+      vsVersion: 15.0
+      platform: $(Build.Platform)
+      configuration: $(PRO.Configuration)
+      clean: true
+      msbuildArchitecture: x64
+  - task: CopyFiles@2
+    name: CopyFiles_2
+    displayName: 'Copy Files to: DB dacpac'
+    inputs:
+      SourceFolder: Database
+      Contents: >-
+        **\bin\**
+      TargetFolder: $(build.artifactstagingdirectory)
+      CleanTargetFolder: true
+  - task: PublishBuildArtifacts@1
+    name: PublishBuildArtifacts_3
+    displayName: 'Publish Artifact: DB'
+    inputs:
+      PathtoPublish: $(build.artifactstagingdirectory)
+      ArtifactName: DB
+      TargetPath: '\\my\share\$(Build.DefinitionName)\$(Build.BuildNumber)'

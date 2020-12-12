@@ -1,0 +1,60 @@
+trigger:
+  branches:
+    include:
+    - refs/heads/master
+name: $(SourceBranchName).$(Date:yyyyMMdd)$(Rev:.r)
+resources:
+  repositories:
+  - repository: self
+    type: git
+    ref: refs/heads/master
+jobs:
+- job: Phase_1
+  displayName: Build
+  cancelTimeoutInMinutes: 1
+  pool:
+    name: CloudBuild
+  steps:
+  - checkout: self
+    clean: true
+  - task: DotNetCoreCLI@2
+    displayName: dotnet restore
+    inputs:
+      command: restore
+      projects: Web.sln
+      selectOrConfig: config
+      nugetConfigPath: nuget.config
+      noCache: true
+  - task: Npm@1
+    displayName: npm CI
+    inputs:
+      command: ci
+      workingDir: Web
+      verbose: false
+  - task: replacetokens@3
+    displayName: Replace tokens in appsettings.Release.json
+    inputs:
+      rootDirectory: Web
+      targetFiles: appsettings.Release.json
+      actionOnMissing: fail
+  - task: replacetokens@3
+    displayName: Replace tokens in webpack.allVar.js
+    inputs:
+      rootDirectory: Web
+      targetFiles: webpack.allVar.js
+      actionOnMissing: fail
+  - task: Npm@0
+    displayName: npm run
+    inputs:
+      cwd: Web
+      command: run
+      arguments: build:Debug
+  - task: DotNetCoreCLI@2
+    displayName: dotnet build
+    inputs:
+      projects: Web.sln
+      arguments: '/t:Publish /p:OutputPath=$(Build.artifactstagingdirectory)\app '
+  - task: PublishBuildArtifacts@1
+    displayName: 'Publish Artifact: Web'
+    inputs:
+      ArtifactName: Web

@@ -1,0 +1,52 @@
+trigger:
+  branches:
+    include:
+    - refs/heads/master
+  paths:
+    include:
+    - NxT.API
+name: $(PRO.Configuration).$(Date:yyyyMMdd)$(Rev:.r)
+jobs:
+- job: Phase_1
+  displayName: Build
+  cancelTimeoutInMinutes: 1
+  pool:
+    name: CloudBuild
+  steps:
+  - checkout: self
+    clean: true
+  - task: DotNetCoreCLI@2
+    displayName: dotnet restore
+    inputs:
+      command: restore
+      projects: API.sln
+      selectOrConfig: config
+      nugetConfigPath: nuget.config
+      noCache: true
+  - task: replacetokens@2
+    displayName: Replace in settings
+    inputs:
+      rootDirectory: API
+      targetFiles: 
+        appsettings.Release.json
+      actionOnMissing: fail
+  - task: SonarQubePrepare@4
+    displayName: Prepare analysis on SonarQube
+    inputs:
+      SonarQube: 
+      projectKey: API
+      projectName: API
+      projectVersion: ${1}0.$(system.definitionId).$(Build.DefinitionVersion).$(Build.BuildId)${5}
+  - task: DotNetCoreCLI@2
+    displayName: dotnet build & Publish
+    inputs:
+      projects: API.sln
+      arguments: /t:Publish /p:OutputPath=$(Build.artifactstagingdirectory)\app /p:configuration=$(PRO.Configuration)
+  - task: SonarQubeAnalyze@4
+    displayName: Run Code Analysis
+  - task: SonarQubePublish@4
+    displayName: Publish Quality Gate Result
+  - task: PublishBuildArtifacts@1
+    displayName: 'Publish Artifact: API'
+    inputs:
+      ArtifactName: API

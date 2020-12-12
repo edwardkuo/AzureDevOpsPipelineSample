@@ -1,0 +1,87 @@
+trigger:
+  branches:
+    include:
+    - refs/heads/master
+  paths:
+    include:
+    - API
+name: $(PRO.Configuration).$(Date:yyyyMMdd)$(Rev:.r)
+jobs:
+- job: Phase_1
+  displayName: Build
+  cancelTimeoutInMinutes: 1
+  pool:
+    name: CloudBuild
+  steps:
+  - checkout: self
+    clean: true
+  - task: DotNetCoreCLI@2
+    displayName: dotnet restore
+    inputs:
+      command: restore
+      projects: API.sln
+      selectOrConfig: config
+      nugetConfigPath: nuget.config
+      noCache: true
+  - task: replacetokens@2
+    displayName: Replace in settings
+    inputs:
+      rootDirectory: API
+      targetFiles: >-
+        appsettings.Release.json
+      actionOnMissing: fail
+  - task: SonarQubePrepare@4
+    displayName: Prepare analysis on SonarQube
+    inputs:
+      SonarQube:
+      projectKey: API
+      projectName: API
+      projectVersion: ${1}0.$(system.definitionId).$(Build.DefinitionVersion).$(Build.BuildId)${5}
+  - task: DotNetCoreCLI@2
+    displayName: dotnet build & Publish
+    inputs:
+      projects: API.sln
+      arguments: /t:Publish /p:OutputPath=$(Build.artifactstagingdirectory)\app /p:configuration=$(PRO.Configuration)
+  - task: SonarQubeAnalyze@4
+    displayName: Run Code Analysis
+  - task: SonarQubePublish@4
+    displayName: Publish Quality Gate Result
+  - task: CopyFiles@2
+    displayName: 'Copy Files to: $(Build.artifactstagingdirectory)'
+    inputs:
+      SourceFolder: API/dockercmd2004
+      Contents: dockerfile
+      TargetFolder: $(Build.artifactstagingdirectory)
+      OverWrite: true
+  - task: PublishBuildArtifacts@1
+    displayName: 'Publish Artifact: API'
+    inputs:
+      ArtifactName: API
+- job: Job_1
+  displayName: Build Docker Agent
+  pool:
+    name: Docker2004
+  steps:
+  - checkout: self
+    clean: true
+  - task: DownloadBuildArtifacts@0
+    displayName: Download Build Artifacts
+    inputs:
+      artifactName: API
+  - task: Docker@0
+    displayName: Build an image
+    inputs:
+      azureSubscriptionEndpoint: 
+      azureContainerRegistry: 'ACR'
+      dockerFile: $(Build.ArtifactStagingDirectory)\API\dockerfile
+      imageName: $(PRO.Configuration)/API:$(Build.BuildNumber)
+      includeLatestTag: true
+  - task: Docker@1
+    displayName: Push images
+    inputs:
+      azureSubscriptionEndpoint: 
+      azureContainerRegistry: ACR
+      command: Push an image
+      imageName: $(PRO.Configuration)/API:$(Build.BuildNumber)
+      includeLatestTag: true
+
