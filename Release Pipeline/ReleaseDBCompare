@@ -1,0 +1,27 @@
+#SQLpackage Path
+$SQLPackagePath='sqlpackage.exe'
+
+#Dacpac & release script Path
+$DacpacPath=$args[0]
+$DBDifferentScript='D:\DB.sql'
+
+#DB Server
+$DBServer='#{DB Server}#'
+$DBName='#{DB Name}#'
+$DBUserName='#{Account}#'
+$DBPwd='#{Password}#'
+
+#SQLPackage Command
+$CompareCmd='/Profile:'+$args[1]
+
+$SQLPackageCmd=' /action:Script /q:true /sourcefile:'+$DacpacPath+' /TargetServerName:'+$DBServer+' /targetdatabasename:'+$DBName+' /TargetUser:'+$DBUserName+' /TargetPassword:'+$DBPwd+' /outputpath:'+$DBDifferentScript+' /p:VerifyDeployment=false'
+$SQLPackagePath=$SQLPackagePath+' --% '+$SQLPackageCmd+' '+$CompareCmd
+
+"Start Generate Release SQL Script file"
+
+"Waiting some second !!"
+#$SQLPackagePath
+
+Invoke-Expression $SQLPackagePath 
+
+"End Generate Release SQL Script file"
